@@ -61,6 +61,35 @@ zero after `FLOW_TIMEOUT_MS` (60 s).
 Arcs are repainted in place and the numbers are drawn to off-screen sprites,
 so the displays don't flicker.
 
+## Demo mode
+
+For bench testing with only the ESP32 and the displays wired up:
+
+```
+pio run -e demo -t upload
+```
+
+In the VS Code PlatformIO sidebar, use **demo → Upload**.
+
+This builds the same firmware with simulated sensors. Every 2-6 s it picks a
+new random pressure and flow and moves toward them smoothly. Some picks land
+in the low and high pressure zones, above `MAX_PLAUSIBLE_GPM`, or in a sensor
+fault, so every display state appears within a minute or two. The gallon total
+starts at 12,345 and rises with the simulated flow. The dial titles read
+`DEMO PRESSURE` and `DEMO FLOW` in amber.
+
+Demo mode is kept separate from real data:
+
+- **MQTT:** it publishes to `ranch/water-demo/*` as client
+  `pumphouse-esp32-demo`. Fake numbers never reach the real topics, and it
+  doesn't disconnect the real board.
+- **Saved total:** it never reads or writes flash, so the real board's gallon
+  total is safe if you reuse this ESP32 later.
+- **Flow input:** GPIO 4 is left unused. With no pull-up resistor fitted, the
+  pin would float and count noise as pulses.
+
+Flash the default `esp32doit-devkit-v1` env for real use.
+
 ## MQTT
 
 Topics and payloads are the same as in the meter project, with two added

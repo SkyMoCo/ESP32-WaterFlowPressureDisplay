@@ -92,15 +92,33 @@
 // that puts the floor at ~0.07 GPM -- anything slower reads as no flow.
 #define FLOW_TIMEOUT_MS       60000
 
+// ── Demo mode ─────────────────────────────────────────────────────────────────
+// Build the "demo" env (pio run -e demo) to run with no sensors attached:
+// pressure and flow are simulated and fed through the same smoothing, fault
+// detection, gauges and MQTT publishing as real readings.  The flow input is
+// not attached (GPIO 4 floats without its pull-up and would count noise), NVS
+// is left alone so the real running total is never overwritten, and MQTT goes
+// to separate topics under a separate client ID.
+#ifndef DEMO_MODE
+#define DEMO_MODE             0
+#endif
+#define DEMO_START_GALLONS    12345.0f   // big enough to show the thousands separator
+
 #include "secrets.h"   // copy secrets.h.template → secrets.h and fill in your values
 
 #define MQTT_PORT             1883
-#define MQTT_TOPIC            "ranch/water/flow"
-#define MQTT_TOPIC_PRESSURE   "ranch/water/pressure"
-#define MQTT_TOPIC_STATUS     "ranch/water/status"
-#define MQTT_TOPIC_DIAG       "ranch/water/diag"
+#if DEMO_MODE
+#define MQTT_TOPIC_ROOT       "ranch/water-demo"
+#define MQTT_CLIENT_ID        "pumphouse-esp32-demo"
+#else
+#define MQTT_TOPIC_ROOT       "ranch/water"
 #define MQTT_CLIENT_ID        "pumphouse-esp32"   // must be unique on the broker: change it if the
                                                   // old ESP32-Water-Meter-Monitor board stays online
+#endif
+#define MQTT_TOPIC            MQTT_TOPIC_ROOT "/flow"
+#define MQTT_TOPIC_PRESSURE   MQTT_TOPIC_ROOT "/pressure"
+#define MQTT_TOPIC_STATUS     MQTT_TOPIC_ROOT "/status"
+#define MQTT_TOPIC_DIAG       MQTT_TOPIC_ROOT "/diag"
 // Uncomment if broker requires auth:
 // #define MQTT_USER   "user"
 // #define MQTT_PASS   "pass"
@@ -220,7 +238,14 @@ static float readPressurePsi(float* outSensorVolts) {
 // (one pulse per interval), too coarse and too slow for a gauge.  Once the
 // meter goes quiet the estimate decays as gal/elapsed, so the needle falls
 // smoothly instead of holding the last rate until the timeout.
+#if DEMO_MODE
+static volatile float demoGpm = 0.0f;   // written on core 1, read on both; 32-bit, so atomic
+#endif
+
 static float instantaneousGpm() {
+#if DEMO_MODE
+    return demoGpm;
+#else
     portENTER_CRITICAL(&isr_mux);
     const uint64_t last   = lastAcceptUs;
     const uint64_t period = lastPeriodUs;
@@ -231,7 +256,64 @@ static float instantaneousGpm() {
     if (since > FLOW_TIMEOUT_MS * 1000ULL) return 0.0f;
     const uint64_t spanUs = since > period ? since : period;
     return GAL_PER_PULSE / (spanUs / 60e6f);
+#endif
 }
+
+#if DEMO_MODE
+// Stands in for readPressurePsi() and the flow ISR.  Every few seconds it picks
+// a new random pressure and flow, then glides toward them the way the real
+// system moves.  Some picks deliberately land in the low/high pressure zones,
+// above MAX_PLAUSIBLE_GPM, or in a sensor fault, so every display state shows
+// up within a minute or two.
+static float demoReadPressurePsi(float* outSensorVolts) {
+    static unsigned long nextChange = 0;
+    static unsigned long lastMs     = millis();
+    static float         psiTarget  = 50.0f, psiNow = 50.0f;
+    static float         gpmTarget  = 0.0f,  gpmNow = 0.0f;
+    static float         pulseFrac  = 0.0f;
+    static bool          fault      = false;
+
+    const unsigned long now = millis();
+    const float         dt  = (now - lastMs) / 1000.0f;
+    lastMs = now;
+
+    if (now >= nextChange) {
+        nextChange = now + random(2000, 6000);
+        const long p = random(100);
+        fault     = p < 4;
+        psiTarget = p < 12 ? random(5, 30) : p < 20 ? random(72, 96) : random(35, 69);
+        const long f = random(100);
+        gpmTarget = f < 25 ? 0.0f
+                  : f < 30 ? random(310, 350) / 10.0f     // over MAX_PLAUSIBLE_GPM -> red arc
+                  :          random(10, 200) / 10.0f;
+    }
+
+    psiNow += (psiTarget - psiNow) * 0.05f;
+    gpmNow += (gpmTarget - gpmNow) * 0.08f;
+    if (gpmTarget == 0.0f && gpmNow < 0.05f) gpmNow = 0.0f;
+    demoGpm = gpmNow;
+
+    // Credit whole pulses the way the ISR would, so the total and the MQTT
+    // interval average track the simulated flow.
+    pulseFrac += gpmNow / 60.0f * dt / GAL_PER_PULSE;
+    const uint32_t whole = (uint32_t)pulseFrac;
+    pulseFrac -= whole;
+    if (whole) {
+        portENTER_CRITICAL(&isr_mux);
+        intervalPulses += whole;
+        totalPulses    += whole;
+        portEXIT_CRITICAL(&isr_mux);
+    }
+
+    // Report through volts like the real sensor, so the fault check in loop()
+    // is exercised too: an open signal wire reads 0 V.
+    const float psi   = psiNow + random(-5, 6) / 10.0f;
+    const float volts = fault ? 0.0f
+                              : PRESSURE_V_MIN + psi / PRESSURE_PSI_MAX * (PRESSURE_V_MAX - PRESSURE_V_MIN);
+    if (outSensorVolts) *outSensorVolts = volts;
+    return (volts - PRESSURE_V_MIN) / (PRESSURE_V_MAX - PRESSURE_V_MIN) * PRESSURE_PSI_MAX;
+}
+#endif
 
 // ── Network task ──────────────────────────────────────────────────────────────
 // WiFi and MQTT run on core 0 so a dropped connection or dead broker, which
@@ -419,9 +501,17 @@ struct Gauge {
     uint16_t    footerColor;
 };
 
-static Gauge pressureGauge = { DISPLAY_CS_PRESSURE, "PRESSURE", "PSI",
+#if DEMO_MODE
+#define TITLE_PREFIX    "DEMO "     // so simulated numbers are never mistaken for real ones
+#define COL_TITLE       COL_WARN
+#else
+#define TITLE_PREFIX    ""
+#define COL_TITLE       COL_DIM
+#endif
+
+static Gauge pressureGauge = { DISPLAY_CS_PRESSURE, TITLE_PREFIX "PRESSURE", "PSI",
                                GAUGE_PSI_MAX, 20.0f, 4, 0,  0.0f, -1, 0, "", "", 0 };
-static Gauge flowGauge     = { DISPLAY_CS_FLOW,     "FLOW",     "GPM",
+static Gauge flowGauge     = { DISPLAY_CS_FLOW,     TITLE_PREFIX "FLOW",     "GPM",
                                GAUGE_GPM_MAX, 5.0f,  5, 1,  0.0f, -1, 0, "", "", 0 };
 
 // Both CS lines are driven explicitly rather than toggled, so a display can
@@ -481,7 +571,7 @@ static void drawDialFace(Gauge& g) {
     }
 
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(COL_DIM, COL_BG);
+    tft.setTextColor(COL_TITLE, COL_BG);
     tft.drawString(g.title, CX, 80, 2);
     tft.setTextColor(COL_TEXT, COL_BG);
     tft.drawString(g.unit, CX, 162, 4);
@@ -607,7 +697,14 @@ static void displaysUpdate(float psi, bool sensorOk) {
 // ── Arduino ───────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
+    pinMode(LED_PIN, OUTPUT);
 
+#if DEMO_MODE
+    Serial.println("DEMO MODE: simulated sensors, publishing to " MQTT_TOPIC_ROOT "/*");
+    portENTER_CRITICAL(&isr_mux);
+    totalPulses = (uint64_t)(DEMO_START_GALLONS / GAL_PER_PULSE);
+    portEXIT_CRITICAL(&isr_mux);
+#else
     // Restore cumulative pulse count from NVS (survives power loss / reboot).
     prefs.begin("flow", /*readOnly=*/false);
     const uint64_t saved = prefs.getULong64("total", 0);
@@ -618,7 +715,6 @@ void setup() {
     Serial.printf("Resumed: %llu pulses (%.1f cf, %.1f gal)\n",
                   saved, saved / PULSES_PER_CF, saved / PULSES_PER_CF * GAL_PER_CF);
 
-    pinMode(LED_PIN,  OUTPUT);
 #if USE_INTERNAL_PULLUP
     pinMode(FLOW_PIN, INPUT_PULLUP);
 #else
@@ -630,6 +726,7 @@ void setup() {
 
     analogSetPinAttenuation(PRESSURE_PIN, ADC_11db);  // widest range; usable/linear to ~2.45V,
                                                       // which the 10k/10k divider stays under
+#endif
 
     displaysInit();
 
@@ -640,8 +737,7 @@ void setup() {
 void loop() {
     static unsigned long lastSample  = 0;
     static unsigned long lastFrame   = 0;
-    static unsigned long lastNvsSave = 0;
-    static float         psiAvg      = NAN;
+    static float        psiAvg      = NAN;
     static float         voltsAvg    = NAN;
 
     const unsigned long now = millis();
@@ -649,7 +745,11 @@ void loop() {
     if (now - lastSample >= PRESSURE_SAMPLE_MS) {
         lastSample = now;
         float       volts = 0.0f;
+#if DEMO_MODE
+        const float psi   = demoReadPressurePsi(&volts);
+#else
         const float psi   = readPressurePsi(&volts);
+#endif
         if (isnan(psiAvg)) { psiAvg = psi; voltsAvg = volts; }
         psiAvg   += (psi   - psiAvg)   * PRESSURE_EMA_ALPHA;
         voltsAvg += (volts - voltsAvg) * PRESSURE_EMA_ALPHA;
@@ -671,10 +771,13 @@ void loop() {
         displaysUpdate(psi, ok);
     }
 
+#if !DEMO_MODE
+    static unsigned long lastNvsSave = 0;
     if (now - lastNvsSave >= NVS_SAVE_MS) {
         lastNvsSave = now;
         nvsFlush();
     }
+#endif
 
     delay(5);
 }
