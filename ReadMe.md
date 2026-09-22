@@ -28,7 +28,8 @@ with the pins moved off the ones the meter already uses.
 | GPIO 18 | SCL (SCLK) | SCL (SCLK) |
 | GPIO 23 | SDA (MOSI) | SDA (MOSI) |
 | GPIO 16 | DC | DC |
-| GPIO 17 | RST | RST |
+| GPIO 17 | RST | — |
+| GPIO 27 | — | RST |
 | GPIO 21 | CS | — |
 | GPIO 22 | — | CS |
 | (BL/BLK, if present) | 3V3 or unconnected | 3V3 or unconnected |
@@ -38,9 +39,13 @@ input and the LED here, so both move. GPIO 16/17 are free on a WROOM-32. On a
 WROVER module they belong to the PSRAM, and DC/RST would need other pins
 (update `platformio.ini`).
 
-Both displays share every line except CS. The firmware brings both CS pins low
-for `tft.init()`, so both controllers get the init sequence together. After
-that, each draw selects only one of them.
+Both displays share every line except CS and RST. The firmware resets both,
+then brings both CS pins low for `tft.init()` so both controllers get the init
+sequence together. After that, each draw selects only one of them.
+
+RST could be shared as well, since the displays are always reset together, but
+one pin per display avoids a Y-split jumper. To share it, wire both RST pins to
+GPIO 17 and set `DISPLAY_RST_FLOW` to 17 too.
 
 ## Displays
 

@@ -65,15 +65,22 @@
                                      // WROOM-32 and is not usable.)
 
 // ── Displays ──────────────────────────────────────────────────────────────────
-// Two 1.28" 240x240 GC9A01 round displays on one SPI bus.  SCLK/MOSI/DC/RST are
-// shared and set in platformio.ini; each display has its own CS, driven here.
-// Only the display whose CS is LOW listens, so one TFT_eSPI instance draws to
-// either by flipping CS between draws.
+// Two 1.28" 240x240 GC9A01 round displays on one SPI bus.  SCLK/MOSI/DC are
+// shared and set in platformio.ini; each display has its own CS and its own
+// RST, driven here.  Only the display whose CS is LOW listens, so one TFT_eSPI
+// instance draws to either by flipping CS between draws.
+//
+// RST could be shared too -- the displays are always reset together -- but one
+// pin per display means no Y-split jumper, and TFT_eSPI only knows about one
+// RST pin anyway, so the sketch pulses both itself (TFT_RST=-1 in
+// platformio.ini leaves TFT_eSPI to issue a software reset as well).
 //
 // GPIO16/17 are free on WROOM-32; on a WROVER module they are the PSRAM bus
 // and DC/RST would have to move.
 #define DISPLAY_CS_PRESSURE   21
 #define DISPLAY_CS_FLOW       22
+#define DISPLAY_RST_PRESSURE  17
+#define DISPLAY_RST_FLOW      27
 #define DISPLAY_ROTATION      0      // 0-3, applied to both displays
 
 // Gauge scales.  Pressure zones colour the arc: below LOW is red (pump not
@@ -651,9 +658,26 @@ static void formatGallons(char* out, size_t n, float gallons) {
 static void displaysInit() {
     pinMode(DISPLAY_CS_PRESSURE, OUTPUT);
     pinMode(DISPLAY_CS_FLOW,     OUTPUT);
+    pinMode(DISPLAY_RST_PRESSURE, OUTPUT);
+    pinMode(DISPLAY_RST_FLOW,     OUTPUT);
 
-    // Both selected: the init sequence, reset pulse and rotation reach both
-    // controllers at once, since they share every other line.
+    // Hardware reset, both displays together, with the same timing TFT_eSPI
+    // uses for its own RST pin.  Deselected while it happens: SCLK and MOSI are
+    // still floating at this point and a selected controller could clock in
+    // garbage.  The GC9A01 needs ~120 ms after release before it takes commands.
+    deselectDisplays();
+    digitalWrite(DISPLAY_RST_PRESSURE, HIGH);
+    digitalWrite(DISPLAY_RST_FLOW,     HIGH);
+    delay(5);
+    digitalWrite(DISPLAY_RST_PRESSURE, LOW);
+    digitalWrite(DISPLAY_RST_FLOW,     LOW);
+    delay(20);
+    digitalWrite(DISPLAY_RST_PRESSURE, HIGH);
+    digitalWrite(DISPLAY_RST_FLOW,     HIGH);
+    delay(150);
+
+    // Both selected: the init sequence and rotation reach both controllers at
+    // once, since they share every other line.
     selectBothDisplays();
     tft.init();
     tft.setRotation(DISPLAY_ROTATION);
