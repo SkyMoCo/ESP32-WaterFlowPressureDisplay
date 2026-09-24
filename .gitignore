@@ -1,3 +1,5 @@
 .pio/
 include/secrets.h
 .vscode/
+.claude/
+__pycache__/
