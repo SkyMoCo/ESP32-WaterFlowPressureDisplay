@@ -10,7 +10,35 @@ To change anything, edit `CONFIG` at the top of the script and run it again. It
 builds a fresh design each time rather than editing the previous one, so
 nothing is lost by re-running.
 
-Default size: **111.2 × 72.6 × 35 mm**, displays side by side.
+Default size: **118.1 × 140.8 × 35 mm** — displays side by side in the top
+band, an electronics bay under them. Both the width and the bay height are
+derived from what has to fit in that bay, so the case is as small as its
+contents allow.
+
+```
+   ┌──────────────────────────┐
+   │     ( )        ( )       │   display band, 72.6 tall
+   │                          │
+   ├──────────────────────────┤
+   │ ┌───────────────┐ ┌────┐ │   bay, 68.2, sized around the
+   │ │  expansion    │ │ I2C│ │   expansion board
+   │ │  board + ESP32│ │    │ │
+   │ └─╥─────────────┘ └────┘ │
+   └───╜──────────────────────┘
+     USB out the left wall
+```
+
+**Everything mounts to the case body**, on posts off the inside of the front
+face. The back plate is a plain lid, so you can wire the whole thing with the
+lid off and nothing dangling from it.
+
+Putting the boards beside the displays rather than behind them is also what
+makes the case shallow: nothing stacks up front to back, so 32 mm covers the
+deepest single item — a display with dupont plugs on, about 20 mm.
+
+`bay_height` is derived from what has to fit (board, mounts, margins, wall), so
+the case grows only as much as it must. Set a number to override it, or set
+`board_mount` to `'plate'` for the old arrangement with the boards on the lid.
 
 ## The display pocket
 
@@ -84,71 +112,103 @@ Check these against your own parts and update `CONFIG`:
 | `tab_count` | 1 | how many tabs your module has |
 | `pcb_thick` | 1.6 | PCB thickness |
 | `pocket_depth` | 3.8 | PCB plus anything standing proud behind it |
-| `esp_pcb_len` / `esp_pcb_wid` | 51.5 / 28.3 | DevKit PCB |
+| `exp_len` / `exp_wid` | 67 / 51 | expansion board — sets the bay height |
+| `i2c_len` / `i2c_wid` | 40 / 21.75 | I2C board — widens the case to fit beside it |
+| `esp_pcb_len` / `esp_pcb_wid` | 51.5 / 28.3 | bare DevKit, for the other mount styles |
 | `depth` | 35.0 | see below |
 
-**Depth is the one to check first.** It has to clear the display headers with
-dupont plugs attached (about 14 mm behind the display PCB) plus the ESP32 on
-its pads. If your plugs stack deeper, or you use right-angle connectors and
-want it slimmer, change `depth`.
+**Depth is the one to check first.** With the boards in the bay rather than
+behind the displays, it only has to clear the deepest single stack — which is
+now the dupont plugs on the expansion board's 3-pin headers at about 23 mm,
+plus room for the wires to turn. If you solder straight to the pads instead,
+28 mm would do.
 
 ## How the ESP32 mounts
 
-`esp_mount` is `'snap'`: four sprung fingers on the back plate grip the board's
-long edges. Press it in, and lift a finger with a fingernail to get it out. No
-screws, no tape, and nothing that depends on your board having mounting holes.
+`esp_mount` is `'expansion'`: the **ESP32 expansion board, 67 × 51 mm**, with
+the DevKit plugged into it. An L-shaped bracket hugs each corner from the
+outside, and a glue pad sits inside each corner for the board to bed down on.
 
 ```
-   finger ─┐   ┌─ finger        each finger has a lip 1.0 over the
-          ▐█▌ ▐█▌               board edge and a shoulder below it
-   ┌───────┴───┴───────┐
-   │   DevKit, pins    │        pins point forward, into the case,
-   │   toward the      │        so the display jumpers plug on from
-   │   front           │        inside while the case is open
-   └───────────────────┘
-        USB-C ↓ out the bottom slot
+   ┌─┐                     ┌─┐     L brackets, 2.4 walls, 12 arms
+   │ └─┐ ▪    ▪    ▪  ┌──┘   │
+   └─┐  └──────────────┘  ┌─┘     9 tape pads, 9 mm square,
+     │  ▪    ▪    ▪       │        729 mm² in total
+   ┌─┘  ┌──────────────┐  └─┐
+   │ ┌─┘ ▪    ▪    ▪  └──┐  │     5 mm standoff clears its
+   └─┘                     └─┘      solder tails underneath
 ```
 
-The board goes in **pins forward** — component side toward the back plate. The
-4 mm standoff clears the components, and the header pins face into the case
-where you can reach them. The USB connector opening points along the board, so
-it lines up with the bottom slot either way up.
+Tape the pads, drop the board in against the brackets, press down. The brackets
+hold it square and stop it sliding while you line it up, and the pad grid gives
+double-sided tape real area to grip — a 3 × 3 grid set by `exp_pad_nx` /
+`exp_pad_ny`.
 
-The lip reaches 1.0 mm over the edge; the header pads on a DevKit V1 sit about
-2.5 mm in, so it grips bare PCB. Worth eyeballing on your board — widen
-`esp_lip` if there's room, shrink it if it fouls anything.
+Measured values go in `exp_len` / `exp_wid` / `exp_thick`, and `exp_fit` (0.6)
+is the slack inside the brackets.
 
-Set `esp_mount` to `'pads'` for the older arrangement: four flat pads for foam
-tape, or screws if you set `esp_screw_holes` to `True` and measure the hole
-spacing into `esp_hole_dx` / `esp_hole_dy`.
+### The two openings
+
+This board (an ESP32 30P expansion board: 3-pin headers down each side, barrel
+jack bottom left) needs two holes in the **left wall**, at different heights
+because the parts sit at different levels in the stack:
+
+| Opening | Height above the face | Why there |
+|---|---|---|
+| Barrel jack | z 8.1 – 21.1 | the jack body sits on the expansion PCB |
+| USB-C | z 16.6 – 24.6 | the DevKit sits `exp_socket` (8.5) higher, on its header |
+
+They're 3 mm apart along the wall, which is a thin pillar of plastic — so if
+you move one, re-run `check_case.py`, which measures that gap.
+
+Aim them with `jack_wall` / `jack_offset` and `usb_wall` / `usb_offset`. The
+offsets run along the wall from the **expansion board's centre**, so the jack
+at -16.5 is 16.5 mm below centre, near the board's bottom edge. Sizes are
+`jack_w` / `jack_h` and `usb_w` / `usb_h`, and they're the hole, not the part.
+
+**This board sets the case height.** The bay is sized around it, so the case is
+140.8 mm tall. To trim that: `bay_margin` (5) is the clearance to the bay
+walls, and `exp_arm` / `exp_wall` set how much the brackets add.
+
+It also sets the depth. Dupont plugs on those 3-pin headers reach z≈23, so at
+35 mm deep there's 5.9 mm between the plugs and the lid for the wires to turn —
+the thing that was tight at 32.
+
+For the bare DevKit instead, `esp_mount` can be `'pads'` (four glue pads, same
+idea as the I2C board — the bay shrinks to about 41 mm and the case to 113 mm)
+or `'snap'` (four sprung fingers gripping the long edges, which add
+`esp_rail_w` either side).
 
 ## I2C expansion board
 
-`i2c_mount` adds four L-shaped clips to the right of the ESP32, one per corner
-of the board. Each is a post with a lip reaching over the corner: tuck two
-corners under their lips, then press the other two down.
+`i2c_mount` is `'brackets'`: the **40 × 21.75 mm** board gets L brackets and
+glue pads at its corners, exactly like the expansion board, on a 9 mm standoff
+so wires can run underneath.
 
 ```
-      ┌─┐         ┌─┐        L clips, lip over each corner
-      │ └─      ──┘ │
-      │  I2C board  │        5 mm standoff, so a bracket stud
-      │ ┌─      ──┐ │        head can sit underneath
-      └─┘         └─┘
+   ┌─┐             ┌─┐     40 mm runs up the case, 21.75 across
+   │ └┐ ▪       ▪ ┌┘ │
+   └┐ └───────────┘ ┌┘     6 tape pads, 6 mm square,
+    │  ▪ I2C   ▪    │       216 mm² in total
+   ┌┘ ┌───────────┐ └┐
+   │ ┌┘ ▪       ▪ └┐ │     2.4 walls, 8 mm arms,
+   └─┘             └─┘      standing 2 mm proud
 ```
 
-**The dimensions are placeholders — measure your board** into `i2c_len`,
-`i2c_wid` and `i2c_thick` (defaults 30 × 20 × 1.6). `i2c_x` / `i2c_y` move it
-around the plate.
+**It's turned on its side** (`i2c_rotate`), long edge running up the case. At
+40 mm wide it wouldn't fit the column beside a 67 mm expansion board otherwise.
 
-Its position isn't arbitrary: it has to miss the ESP32 cradle on one side, the
-case wall on the other, and the bracket's stud heads and keyhole slots
-underneath. The default (x = 36, arms 4 mm) straddles the studs with about
-1 mm to spare. If you move it or make it bigger, check those clearances —
-a clip post over a keyhole would have nothing to print onto.
+`i2c_x` / `i2c_y` are `None`, which parks it against the free edge of the bay
+beside the expansion board. Give them numbers to place it yourself, then re-run
+`check_case.py` — it tests the brackets against the expansion board, the bay
+walls and the display tabs above.
 
-There's room for a board up to about 26 mm wide in that bay. Anything larger
-wants the left-hand side too, or the `ears` mounting style, which has no studs
-in the way.
+`i2c_mount` can also be `'standoffs'` (pads only, no brackets, for a board whose
+size you'd rather not pin down) or `'clips'` (lipped clips that grip without
+tape, but have to match the board closely).
+
+`tape_thick` (1.0) is counted into the bracket height, so the brackets still
+stand proud of a board sitting on tape rather than straight on the pads.
 
 ## Printing
 
@@ -156,8 +216,8 @@ No supports anywhere.
 
 | Part | Orientation | Notes |
 |---|---|---|
-| Case body | Front face on the plate | Gives the best-looking front; the PCB seats are part of the solid front face, so nothing overhangs |
-| Back plate | Flat, recess down, snap fingers up | The finger lips are a 1.0 mm overhang, which bridges fine |
+| Case body | Front face on the plate | Gives the best-looking front; the PCB seats and the board standoffs all grow upward from it, so nothing overhangs |
+| Back plate | Flat, recess down | A plain lid now — no mounts on it |
 | Wall bracket | Flat, studs up | The stud heads overhang 2 mm; fine in PLA, but slow the first layer over them if your printer droops |
 | Clips L / Clips R | Flat | Two arcs per display, four in total; small and quick, so print spares |
 
@@ -172,20 +232,25 @@ direct sun or summer heat.
 | 8 | M2 × 5 self-tapping | display clips (4 per display) |
 | 4 | #8 or M4 pan-head wall screws | bracket ears, with drywall anchors |
 | — | dupont jumpers | displays to the ESP32 |
+| — | double-sided foam tape | expansion and I2C boards onto their pad grids |
 
 ## Assembly
 
+Everything but the lid attaches to the case body, so this all happens with the
+case face-down on the bench and the back open.
+
 1. Drop each display into its pocket from inside, glass toward the window and
-   tabs into the two slots, then clamp the PCB rim with the two clips and four
-   M2 screws. The clips are notched at the tabs so they clear the headers.
-2. Press the DevKit into the snap fingers on the back plate, pins forward and
-   the USB-C end toward the bottom.
-3. Wire the displays to the ESP32 — see the wiring table in the
-   [main ReadMe](../../ReadMe.md). Do this before closing the case; the plugs
-   are the tightest thing in there.
-4. Feed the USB cable out through the bottom slot and screw the back plate on.
+   the tab into its slot, then clamp the PCB rim with the two clips and four
+   M2 screws. The clips are notched at the tab so they clear the header.
+2. Tape the pad grids, then press each board down inside its L brackets — the
+   expansion board on nine pads, the I2C board on six. The brackets locate
+   them, so they go in square. Plug the DevKit into the expansion board.
+3. Wire it up — see [hardware/WIRING.md](../WIRING.md). Everything is facing
+   you and nothing is attached to the lid, which is the point of this layout.
+4. Check the barrel jack and the DevKit's USB-C line up with their holes in
+   the left wall, then screw the lid on.
 5. Screw the **wall bracket** up on its own, four screws through the ears:
-   **121.2 mm apart across, 25.8 mm apart vertically**.
+   **128.1 mm apart across, 94.0 mm apart vertically**.
 6. Hang the case on it — hold it about 9 mm high so the four studs pass
    through the big holes, then let it drop. The bracket disappears into the
    recess in the back plate and its ears pass through notches in the rim, so

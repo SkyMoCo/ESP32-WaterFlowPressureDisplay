@@ -5,10 +5,13 @@ Fusion 360 script: Utilities -> Add-Ins -> Scripts and Add-Ins -> Scripts ->
 the green +, point it at this folder, then Run.  It opens a new design and
 builds these bodies in assembly position:
 
-    Case body    front face with two display pockets, walls, screw bosses,
-                 cable slot and vents.  Printed front-face-down it needs no
-                 supports.
-    Back plate   keyhole wall mounts, ESP32 pads, screwed on from behind.
+    Case body    front face with two display pockets up top and an electronics
+                 bay under them, plus walls, screw bosses, cable slot and
+                 vents.  The ESP32 and I2C board stand on posts off the inside
+                 of the front face, so everything is attached to this one part.
+                 Printed front-face-down it needs no supports.
+    Back plate   a plain lid: keyhole slots for the wall bracket, nothing else.
+    Wall bracket stays on the wall; the case lifts off it.
     Clips L/R    two arcs per display that press the PCB into its pocket.
 
 Dimensions live in CONFIG below, in millimetres.  To change the design, edit a
@@ -38,7 +41,7 @@ CONFIG = {
     # Build a single-pocket test tile instead of the case: same pocket, collar,
     # pads and clips, nothing else.  A ~15 minute print that says whether the
     # module actually drops in before you commit to the full case.
-    'test_tile':     True,
+    'test_tile':     False,
 
     # ---- display module ----------------------------------------------------
     # Nominal part size; `fit` is added to every pocket dimension.
@@ -51,9 +54,16 @@ CONFIG = {
     'pcb_fit':         0.8,   # 0.4 a side.  0.4 total was too tight to drop
                               # the PCB in; this also brings the tab slot to
                               # 24.3, which is what the MakerWorld case uses.
-    'window_dia':    35.75,   # hole in the front face (1.407 in), measured off
-                              # the glass.  Leaves the PCB 1.1 of seat to rest
-                              # on, so don't open it up much further.
+    # The glass stands proud of the PCB, so it gets its own counterbore behind
+    # the face rather than having to pass through the visible aperture.  That
+    # way the aperture can be generous on clearance without eating the seat the
+    # PCB rests on, and the bezel hides the dead border around the glass.
+    'glass_dia':     35.75,   # measured (1.407 in)
+    'glass_fit':       0.5,   # 0.25 a side.  Every bit of this comes off the
+                              # seat: the PCB rim outside the glass is only
+                              # 1.1 wide, so the clips carry the rest.
+    'glass_depth':     1.5,   # how far the glass stands off the PCB, plus slack
+    'window_dia':     34.5,   # visible aperture; clears the ~32.4 active area
     'pocket_depth':    3.8,   # PCB plus whatever stands proud behind it
     'solder_relief':   1.6,   # sunk under the tab, for the pin solder joints
     'relief_in':      10.0,   # how close to the display centre that relief
@@ -66,9 +76,20 @@ CONFIG = {
     'display_gap':    14.0,   # between the two round PCB edges
     'side_margin':    10.0,
     'top_margin':     10.0,   # beyond the tab tips
-    'depth':          35.0,   # front face to back plate.  Must clear the
-                              # header pins with dupont plugs on (~14 behind
-                              # the PCB) plus the ESP32 on its pads.
+    # Bay under the displays holding the boards, so everything mounts to the
+    # case body and the back plate stays a plain lid.  Costs height, but saves
+    # depth: nothing has to stack up behind the displays.
+    'bay_height':     None,   # None sizes it to whatever has to fit, so the
+                              # case grows only as much as it has to
+    # 'body'   boards on posts off the front face, inside the bay
+    # 'plate'  boards on the back plate, as before -- then set bay_height to 0
+    #          and depth back to 40
+    'board_mount':  'body',
+    'depth':          35.0,   # front face to back plate.  With the boards in
+                              # the bay rather than behind the displays, this
+                              # only has to clear the deepest single stack:
+                              # dupont plugs on the expansion board's 3-pin
+                              # headers, ~23, plus room for the wires to turn.
 
     # ---- shell -------------------------------------------------------------
     'wall':            2.4,
@@ -90,12 +111,47 @@ CONFIG = {
                               # the tabs and the header behind them
 
     # ---- ESP32 mounting ----------------------------------------------------
-    # 'snap'  four sprung fingers grip the long edges; press the board in,
-    #         lift the fingers to get it out.  No screws, no tape.
-    # 'pads'  four flat pads for foam tape, or screws if the board has holes.
-    'esp_mount':    'snap',
-    'esp_pcb_len':    51.5,   # long edge, runs vertically
+    # 'expansion'  mount an ESP32 expansion board / carrier, with the DevKit
+    #              plugged into it.  L-shaped brackets hug its corners to hold
+    #              it square, and it beds down on glue pads inside them.
+    # 'pads'       the bare DevKit on four flat-topped glue pads.
+    # 'snap'       the bare DevKit in four sprung fingers.  They add
+    #              esp_rail_w either side, which a derived bay_height allows.
+    'esp_mount': 'expansion',
+    # Expansion board, measured.  Long edge runs across the case.
+    'exp_len':        67.0,
+    'exp_wid':        51.0,
+    'exp_thick':       1.6,
+    'exp_fit':         0.6,   # slack inside the L brackets
+    'exp_standoff':    5.0,   # clears the header pins soldered through it
+    'exp_wall':        2.4,   # bracket wall thickness
+    'exp_arm':        12.0,   # how far each arm of an L runs along an edge
+    'exp_rise':        2.0,   # how far the brackets stand above the board, to
+                              # hold it square while the glue sets
+    'exp_pad':         9.0,   # tape pad, square
+    'exp_pad_nx':        3,   # grid of them across and up the board, so
+    'exp_pad_ny':        3,   # double-sided tape has real area to grip
+    'exp_x':          None,   # None places it in the bay automatically
+    'exp_y':          None,
+    'exp_socket':      8.5,   # female header the DevKit plugs into, so the
+                              # DevKit's own PCB sits this far above the board
+    # Openings for the two sockets.  Offsets run along the wall, measured from
+    # the expansion board's centre; sizes are the hole, not the part.
+    'jack_wall':    'left',   # barrel jack, bottom left of the board
+    'jack_offset':   -20.0,   # measured: 20 below the board centre
+    'jack_w':         14.0,
+    'jack_h':         11.0,   # body height above the board
+    'usb_wall':     'left',   # the DevKit's USB-C, for reflashing in place
+    'usb_offset':      0.0,
+    'usb_w':          13.0,
+    'usb_h':           7.0,
+    'esp_pcb_len':    51.5,   # long edge
     'esp_pcb_wid':    28.3,   # short edge, the USB-C end
+    'esp_rotate':     True,   # True lays the board on its side in the bay, so
+                              # the USB-C end faces a side wall.  False stands
+                              # it upright, USB toward the bottom wall.
+    'esp_x':          None,   # None places it in the bay automatically
+    'esp_y':          None,
     'esp_pcb_thick':   1.6,
     'esp_fit':         0.4,   # slack across the width
     'esp_pad_height':  4.0,   # standoff: clears the header pins, or the
@@ -113,23 +169,36 @@ CONFIG = {
     'esp_pilot':       2.2,
 
     # ---- I2C expansion board -----------------------------------------------
-    # Four L-shaped clips on the back plate, beside the ESP32: a post at each
-    # corner with a lip reaching over the board.  Tuck two corners under their
-    # lips and press the other two down.
-    # MEASURE your board -- these are placeholders.
-    'i2c_mount':      True,
-    'i2c_len':        30.0,   # along the case, like the DevKit
-    'i2c_wid':        20.0,
+    # 'brackets'   L-shaped brackets hugging its corners with glue pads inside,
+    #              same as the expansion board.
+    # 'standoffs'  four flat-topped glue pads only, no brackets.
+    # 'clips'      L-shaped clips with lips that grip the board's corners.
+    # 'none'
+    'i2c_mount': 'brackets',
+    'i2c_rotate':     True,   # True runs its long edge up the case, which is
+                              # what makes it fit in the column beside the
+                              # expansion board
+    'i2c_rise':        2.0,   # how far the brackets stand above the board
+    'i2c_pad':         6.0,   # tape pad, square
+    'i2c_pad_nx':        2,
+    'i2c_pad_ny':        3,
+    'i2c_x':          None,   # None centres the pad group in whatever bay
+    'i2c_y':          None,   # space is left beside the DevKit
+    'i2c_pad_dia':     7.0,
+    'i2c_pad_dx':     17.0,   # pad centres across.  Wide enough that the pads
+                              # straddle the keyhole slot rather than sitting
+                              # over it -- a pad over a hole has nothing to
+                              # print onto.
+    'i2c_pad_dy':     20.0,   # and clear of the stud heads
+    'i2c_standoff':    9.0,   # clears the bracket stud heads underneath, with
+                              # room left to run wires under the board
+    'i2c_len':       40.00,   # measured
+    'i2c_wid':       21.75,
     'i2c_thick':       1.6,
-    'i2c_x':          36.0,   # centre on the plate; +x is right of the ESP32.
-                              # Placed so the clips straddle the bracket studs
-                              # rather than landing on them.
-    'i2c_y':           0.0,
-    'i2c_fit':         0.4,
-    'i2c_standoff':    5.0,   # clears the bracket stud heads underneath
-    'i2c_post':        3.0,   # clip thickness
-    'i2c_arm':         4.0,   # how far each arm of the L runs along an edge
-    'i2c_lip':         1.5,   # reach over the board corner
+    'i2c_fit':         0.6,   # slack inside the brackets
+    'i2c_post':        2.4,   # bracket / clip wall thickness
+    'i2c_arm':         8.0,   # how far each arm of the L runs along an edge
+    'i2c_lip':         1.5,   # 'clips' mode: reach over the board corner
     'i2c_lip_t':       1.2,
 
     # ---- case screws -------------------------------------------------------
@@ -168,8 +237,14 @@ CONFIG = {
     'keyhole_slide':   9.0,
 
     # ---- openings ----------------------------------------------------------
+    'cable_wall':   'auto',   # 'auto' follows the USB end: 'left' when the
+                              # board is laid on its side, 'bottom' upright.
+                              # Can be forced to 'left'/'right'/'bottom'.
     'cable_w':        14.0,
     'cable_len':       9.0,
+    'bay_margin':      5.0,   # clearance from a board to the bay walls
+    'tape_thick':      1.0,   # double-sided tape under a board, so the
+                              # brackets still stand proud of it
     'vent_w':          2.4,
     'vent_len':       16.0,
     'vent_count':        4,
@@ -242,6 +317,7 @@ class Case(object):
 
         # Pocket the module drops into: circle plus a slot per tab.
         self.pocket_dia = cfg['pcb_dia'] + fit
+        self.glass_bore = cfg['glass_dia'] + cfg['glass_fit']
         self.pocket_tab_w = cfg['pcb_tab_w'] + fit
         self.pocket_tab_reach = cfg['pcb_tab_reach'] + fit / 2
 
@@ -258,8 +334,18 @@ class Case(object):
         self.clip_od = 2 * (self.pad_radius + cfg['clip_clear'] / 2.0 + 1.2)
         self.clip_id = cfg['pcb_dia'] - 2 * cfg['clip_overlap']
 
-        # Case outline.  Height is set by the tabs, width by the two circles.
+        # Case outline.  Height is the display band plus the bay, width the
+        # two circles.
         self.spacing = cfg['pcb_dia'] + cfg['display_gap']
+        if cfg['test_tile'] or cfg['board_mount'] != 'body':
+            self.bay_h = 0.0
+        elif cfg['bay_height'] is not None:
+            self.bay_h = cfg['bay_height']
+        else:
+            # Tall enough for the main board plus its mounts, a margin each
+            # side, and the bottom wall.  The display band bounds it on top.
+            _, across, pad = self.primary_board()
+            self.bay_h = across + 2 * pad + 2 * cfg['bay_margin'] + cfg['wall']
         if cfg['test_tile']:
             self.width = self.collar_dia + 16.0
             # Only as tall as the module actually reaches, each way.
@@ -267,19 +353,42 @@ class Case(object):
             self.tile_y1 = top + 8.0
             self.tile_y0 = -(self.collar_tab_reach + 8.0)
             self.height = self.tile_y1 - self.tile_y0
+            self.display_h = self.height
             self.centres = (0.0,)
         else:
-            self.width = self.spacing + cfg['pcb_dia'] + 2 * cfg['side_margin']
-            # Symmetric about the windows even with a single tab, so the two
-            # dials sit centred in the face.
-            self.height = 2 * (cfg['pcb_tab_reach'] + cfg['top_margin'])
+            self.tile_y0 = self.tile_y1 = 0.0
+            # Wide enough for the displays, or for the bay, whichever needs
+            # more.  A board that mounts by its outline has to fit side by
+            # side with the main one.
+            display_w = self.spacing + cfg['pcb_dia'] + 2 * cfg['side_margin']
+            bay_w = 0.0
+            if cfg['board_mount'] == 'body':
+                span_x, _, pad = self.primary_board()
+                bay_w = 2 * cfg['wall'] + 2 * cfg['bay_margin'] + span_x + 2 * pad
+                second = self.second_board()
+                if second:
+                    bay_w += cfg['bay_margin'] + second[0] + 2 * second[2]
+            self.width = max(display_w, bay_w)
+            # Display band is symmetric about the windows even with a single
+            # tab, so the dials sit centred in it; the bay is added below.
+            self.display_h = 2 * (cfg['pcb_tab_reach'] + cfg['top_margin'])
+            self.height = self.display_h + self.bay_h
             self.centres = (-self.spacing / 2.0, self.spacing / 2.0)
+
+        # Displays sit in the upper band, the bay below them.  The bay's usable
+        # space runs from the inside of the bottom wall up to the display band.
+        self.disp_cy = self.bay_h / 2.0
+        self.bay_y1 = self.disp_cy - self.display_h / 2.0
+        self.bay_y0 = -self.height / 2.0 + cfg['wall']
+        self.bay_cy = (self.bay_y0 + self.bay_y1) / 2.0
 
         self.pcb_back_z = cfg['front_thick'] + cfg['pcb_thick']
         self.plate_face_z = cfg['depth'] - cfg['plate_thick']
         self.body = None
         self.plate = None
         self.bracket = None
+
+        self.place_boards()
 
         # Wall bracket and the recess it lives in.  The rim has to stay clear
         # of the corner bosses, or the case screw heads would land inside the
@@ -296,6 +405,96 @@ class Case(object):
         self.bracket_h = self.recess_h - cfg['hang_slide'] - 2 * gap
         self.bracket_cy = self.recess_h / 2 - gap - self.bracket_h / 2
 
+    # -- board placement ---------------------------------------------------
+    def primary_board(self):
+        """Footprint of the board the bay is sized around, and how far its
+        mounts stick out past it: (across the case, up the case, mount pad)."""
+        cfg = self.cfg
+        if cfg['esp_mount'] == 'expansion':
+            return cfg['exp_len'], cfg['exp_wid'], cfg['exp_wall']
+        if cfg['esp_rotate']:
+            span_x, span_y = cfg['esp_pcb_len'], cfg['esp_pcb_wid']
+        else:
+            span_x, span_y = cfg['esp_pcb_wid'], cfg['esp_pcb_len']
+        return span_x, span_y, (cfg['esp_rail_w'] if cfg['esp_mount'] == 'snap' else 0.0)
+
+    def second_board(self):
+        """The I2C board's footprint and mount pad, or None if it isn't
+        mounted by its outline (glue pads go wherever they fit)."""
+        cfg = self.cfg
+        if cfg['i2c_mount'] not in ('brackets', 'clips'):
+            return None
+        if cfg['i2c_rotate']:
+            span_x, span_y = cfg['i2c_wid'], cfg['i2c_len']
+        else:
+            span_x, span_y = cfg['i2c_len'], cfg['i2c_wid']
+        return span_x, span_y, cfg['i2c_post']
+
+    def place_boards(self):
+        """Where the boards sit, and which face their mounts grow from.
+
+        On 'body' they stand on posts off the inside of the front face, in the
+        bay under the displays, and the back plate is left as a plain lid."""
+        cfg = self.cfg
+        self.on_body = cfg['board_mount'] == 'body'
+        self.mount_base_z = cfg['front_thick'] if self.on_body else self.plate_face_z
+        self.mount_dir = 1.0 if self.on_body else -1.0
+
+        span_x, _, pad = self.primary_board()
+        inner = self.width / 2.0 - cfg['wall']
+        margin = cfg['bay_margin']
+        auto_y = self.bay_cy if self.on_body else 0.0
+        expansion = cfg['esp_mount'] == 'expansion'
+
+        # Main board to the left of the bay, so the I2C board gets the column
+        # beside it.  USB end against the left wall.
+        key_x, key_y = ('exp_x', 'exp_y') if expansion else ('esp_x', 'esp_y')
+        self.board_x = -inner + margin + pad + span_x / 2.0 \
+            if cfg[key_x] is None else cfg[key_x]
+        self.board_y = auto_y if cfg[key_y] is None else cfg[key_y]
+        # esp_rect/esp_point work in the main board's frame.
+        self.esp_x, self.esp_y = self.board_x, self.board_y
+
+        # I2C board centred in what is left of the bay beside it.
+        free0 = self.board_x + span_x / 2.0 + pad + margin
+        free1 = inner - margin
+        second = self.second_board()
+        if second and cfg['i2c_x'] is None:
+            # Mounted by its outline, so sit it against the free edge rather
+            # than floating in the middle of whatever is left.
+            self.i2c_x = free0 + second[2] + second[0] / 2.0
+        elif cfg['i2c_x'] is None:
+            self.i2c_x = (free0 + free1) / 2.0
+        else:
+            self.i2c_x = cfg['i2c_x']
+        self.i2c_y = auto_y if cfg['i2c_y'] is None else cfg['i2c_y']
+
+    def mount_body(self):
+        return self.body if self.on_body else self.plate
+
+    def mount_plane(self, height):
+        """Sketch plane `height` mm above the face the mounts grow from."""
+        return sketch_at(self.root, self.mount_base_z + self.mount_dir * height)
+
+    def mount_grow(self, prof, height, operation):
+        return extrude(self.root, prof, self.mount_dir * height, operation,
+                       self.mount_body())
+
+    def esp_rect(self, sketch, u0, u1, v0, v1):
+        """Rectangle in board coordinates: u along its length, v across it."""
+        if self.cfg['esp_rotate']:
+            xs = (self.esp_x + u0, self.esp_x + u1)
+            ys = (self.esp_y + v0, self.esp_y + v1)
+        else:
+            xs = (self.esp_x + v0, self.esp_x + v1)
+            ys = (self.esp_y + u0, self.esp_y + u1)
+        rect(sketch, min(xs), min(ys), max(xs), max(ys))
+
+    def esp_point(self, u, v):
+        if self.cfg['esp_rotate']:
+            return (self.esp_x + u, self.esp_y + v)
+        return (self.esp_x + v, self.esp_y + u)
+
     # -- outline helpers ---------------------------------------------------
     def tab_signs(self):
         """-1 is the tab pointing down, which every module has; +1 is the
@@ -306,15 +505,16 @@ class Case(object):
     def module_outline(self, sketch, x, dia, tab_w, tab_reach):
         """Circle plus a rectangle per tab, as overlapping shapes.  Taking
         every profile of the sketch gives their union."""
-        circle(sketch, x, 0, dia)
+        circle(sketch, x, self.disp_cy, dia)
         for sy in self.tab_signs():
-            y0, y1 = sorted((0.0, sy * tab_reach))
+            y0, y1 = sorted((self.disp_cy, self.disp_cy + sy * tab_reach))
             rect(sketch, x - tab_w / 2.0, y0, x + tab_w / 2.0, y1)
 
     def tab_rects(self, sketch, x, tab_w, tab_reach, inner):
         """Just the tab ends, from `inner` out to the tips."""
         for sy in self.tab_signs():
-            y0, y1 = sorted((sy * inner, sy * tab_reach))
+            y0, y1 = sorted((self.disp_cy + sy * inner,
+                             self.disp_cy + sy * tab_reach))
             rect(sketch, x - tab_w / 2.0, y0, x + tab_w / 2.0, y1)
 
     # -- main body ---------------------------------------------------------
@@ -336,10 +536,18 @@ class Case(object):
                 self.plate_face_z - cfg['front_thick'], CUT, self.body)
 
     def windows(self):
+        """Visible aperture through the face, then a counterbore behind it that
+        the glass sits in."""
+        cfg = self.cfg
         sk = sketch_at(self.root, 0)
         for x in self.centres:
-            circle(sk, x, 0, self.cfg['window_dia'])
-        extrude(self.root, profiles(sk), self.cfg['front_thick'], CUT, self.body)
+            circle(sk, x, self.disp_cy, cfg['window_dia'])
+        extrude(self.root, profiles(sk), cfg['front_thick'], CUT, self.body)
+
+        bore = sketch_at(self.root, cfg['front_thick'])
+        for x in self.centres:
+            circle(bore, x, self.disp_cy, self.glass_bore)
+        extrude(self.root, profiles(bore), -cfg['glass_depth'], CUT, self.body)
 
     def pockets(self):
         """Collar walls around each module, the pocket itself, and the relief
@@ -372,7 +580,7 @@ class Case(object):
         for x in self.centres:
             for ang in self.pad_angles:
                 px = x + self.pad_radius * math.cos(math.radians(ang))
-                py = self.pad_radius * math.sin(math.radians(ang))
+                py = self.disp_cy + self.pad_radius * math.sin(math.radians(ang))
                 circle(pads, px, py, cfg['clip_pad_dia'])
                 circle(holes, px, py, cfg['clip_pilot'])
         extrude(self.root, profiles(pads), self.collar_h, JOIN, self.body)
@@ -393,14 +601,72 @@ class Case(object):
         extrude(self.root, profiles(sk), height, JOIN, self.body)
         extrude(self.root, profiles(holes), -height, CUT, self.body)
 
-    def cable_slot(self):
-        """Notch in the bottom wall, lined up with the DevKit's USB-C end."""
+    def wall_opening(self, wall, along, width, z0, z1):
+        """Rectangular hole through one wall, `along` positioning it on that
+        wall and z0..z1 setting its height above the front face."""
         cfg = self.cfg
-        board_back = self.plate_face_z - cfg['esp_pad_height']
-        usb_z = board_back - 1.6 - 1.6          # PCB thickness, then connector
-        sk = sketch_at(self.root, usb_z - cfg['cable_len'] / 2.0)
-        rect(sk, -cfg['cable_w'] / 2, -self.height / 2 - 1,
-             cfg['cable_w'] / 2, -self.height / 2 + cfg['wall'] + 1)
+        half = width / 2.0
+        sk = sketch_at(self.root, z0)
+        if wall in ('bottom', 'top'):
+            sy = -1 if wall == 'bottom' else 1
+            rect(sk, along - half, sy * (self.height / 2 + 1),
+                 along + half, sy * (self.height / 2 - cfg['wall'] - 1))
+        else:
+            sx = -1 if wall == 'left' else 1
+            rect(sk, sx * (self.width / 2 + 1), along - half,
+                 sx * (self.width / 2 - cfg['wall'] - 1), along + half)
+        extrude(self.root, profiles(sk), z1 - z0, CUT, self.body)
+
+    def expansion_openings(self):
+        """Holes for the barrel jack on the expansion board and the USB-C on
+        the DevKit plugged in above it.  Both are keyed off where those parts
+        actually sit in the stack."""
+        cfg = self.cfg
+        board_top = cfg['front_thick'] + cfg['exp_standoff'] + cfg['exp_thick']
+        devkit_pcb = board_top + cfg['exp_socket']
+
+        along = self.board_y if cfg['jack_wall'] in ('left', 'right') else self.board_x
+        self.wall_opening(cfg['jack_wall'], along + cfg['jack_offset'], cfg['jack_w'],
+                          board_top - 1.0, board_top + cfg['jack_h'] + 1.0)
+
+        along = self.board_y if cfg['usb_wall'] in ('left', 'right') else self.board_x
+        self.wall_opening(cfg['usb_wall'], along + cfg['usb_offset'], cfg['usb_w'],
+                          devkit_pcb - 1.0, devkit_pcb + cfg['usb_h'])
+
+    def cable_slot(self):
+        """Notch for the USB plug, in whichever wall the DevKit's USB-C end
+        faces.  The connector sits between the board and the face it mounts
+        from, so the slot starts just clear of that face."""
+        cfg = self.cfg
+        if cfg['esp_mount'] == 'expansion':
+            self.expansion_openings()
+            return
+        wall = cfg['cable_wall']
+        offset = 0.0
+        if wall == 'auto':
+            if cfg['esp_mount'] == 'expansion':
+                wall = cfg['exp_usb_wall']
+                offset = cfg['exp_usb_offset']
+            else:
+                wall = 'left' if cfg['esp_rotate'] else 'bottom'
+
+        half_w = cfg['cable_w'] / 2.0
+        if self.on_body:
+            z0 = cfg['front_thick'] + 0.1
+        else:
+            board_back = self.plate_face_z - cfg['esp_pad_height']
+            z0 = board_back - 1.6 - 1.6 - cfg['cable_len'] / 2.0
+
+        sk = sketch_at(self.root, z0)
+        if wall == 'bottom':
+            cx = self.board_x + offset
+            rect(sk, cx - half_w, -self.height / 2 - 1,
+                 cx + half_w, -self.height / 2 + cfg['wall'] + 1)
+        else:
+            sx = -1 if wall == 'left' else 1
+            cy = self.board_y + offset
+            rect(sk, sx * (self.width / 2 + 1), cy - half_w,
+                 sx * (self.width / 2 - cfg['wall'] - 1), cy + half_w)
         extrude(self.root, profiles(sk), cfg['cable_len'], CUT, self.body)
 
     def vents(self):
@@ -584,19 +850,95 @@ class Case(object):
         extrude(self.root, profiles(heads), -cfg['stud_head_t'], JOIN, self.bracket)
 
     def esp_mount(self):
-        if self.cfg['esp_mount'] == 'snap':
+        if self.cfg['esp_mount'] == 'expansion':
+            self.expansion_mount()
+        elif self.cfg['esp_mount'] == 'snap':
             self.esp_snap()
         else:
             self.esp_pads()
-        if self.cfg['i2c_mount']:
+        if self.cfg['i2c_mount'] == 'brackets':
+            self.i2c_brackets()
+        elif self.cfg['i2c_mount'] == 'standoffs':
+            self.i2c_standoffs()
+        elif self.cfg['i2c_mount'] == 'clips':
             self.i2c_clips()
+
+    def pad_grid(self, cx, cy, span_x, span_y, pad, nx, ny):
+        """Centres of a grid of tape pads inside a board's footprint, the outer
+        ones tucked just in from its edges."""
+        def axis(centre, half, count):
+            reach = half - pad / 2.0 - 0.5
+            if count <= 1 or reach <= 0:
+                return [centre]
+            step = 2 * reach / (count - 1)
+            return [centre - reach + i * step for i in range(count)]
+
+        return [(px, py) for px in axis(cx, span_x / 2.0, nx)
+                for py in axis(cy, span_y / 2.0, ny)]
+
+    def bracket_mount(self, cx, cy, span_x, span_y, fit, thick, standoff,
+                      wall, arm, rise, pad, nx, ny):
+        """An L-shaped bracket at each corner of a board, hugging it from the
+        outside so it cannot shift or rack, over a grid of flat pads for
+        double-sided tape.
+
+        Tape the pads, drop the board in against the brackets, press down.  The
+        brackets stand `rise` above the board -- counting the tape under it --
+        so they hold it square and stop it sliding before the tape grabs."""
+        half_x = (span_x + fit) / 2.0
+        half_y = (span_y + fit) / 2.0
+        h_wall = standoff + self.cfg['tape_thick'] + thick + rise
+
+        walls = self.mount_plane(0)
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                xe = cx + sx * half_x
+                ye = cy + sy * half_y
+                # One arm along each edge meeting at the corner.
+                self.corner_rect(walls, xe, xe + sx * wall, ye, ye - sy * arm)
+                self.corner_rect(walls, xe, xe - sx * arm, ye, ye + sy * wall)
+        self.mount_grow(profiles(walls), h_wall, JOIN)
+
+        pads = self.mount_plane(0)
+        for px, py in self.pad_grid(cx, cy, span_x, span_y, pad, nx, ny):
+            rect(pads, px - pad / 2.0, py - pad / 2.0, px + pad / 2.0, py + pad / 2.0)
+        self.mount_grow(profiles(pads), standoff, JOIN)
+
+    def expansion_mount(self):
+        cfg = self.cfg
+        self.bracket_mount(self.board_x, self.board_y, cfg['exp_len'], cfg['exp_wid'],
+                           cfg['exp_fit'], cfg['exp_thick'], cfg['exp_standoff'],
+                           cfg['exp_wall'], cfg['exp_arm'], cfg['exp_rise'],
+                           cfg['exp_pad'], cfg['exp_pad_nx'], cfg['exp_pad_ny'])
+
+    def i2c_brackets(self):
+        cfg = self.cfg
+        span_x, span_y, _ = self.second_board()
+        self.bracket_mount(self.i2c_x, self.i2c_y, span_x, span_y,
+                           cfg['i2c_fit'], cfg['i2c_thick'], cfg['i2c_standoff'],
+                           cfg['i2c_post'], cfg['i2c_arm'], cfg['i2c_rise'],
+                           cfg['i2c_pad'], cfg['i2c_pad_nx'], cfg['i2c_pad_ny'])
+
+    def i2c_pads(self):
+        """Centres of the four glue pads."""
+        cfg = self.cfg
+        return [(self.i2c_x + sx * cfg['i2c_pad_dx'] / 2.0,
+                 self.i2c_y + sy * cfg['i2c_pad_dy'] / 2.0)
+                for sx in (-1, 1) for sy in (-1, 1)]
+
+    def i2c_standoffs(self):
+        """Four flat-topped posts for a small I2C board, glued on.  Tall enough
+        to run wires underneath."""
+        cfg = self.cfg
+        sk = self.mount_plane(0)
+        for px, py in self.i2c_pads():
+            circle(sk, px, py, cfg['i2c_pad_dia'])
+        self.mount_grow(profiles(sk), cfg['i2c_standoff'], JOIN)
 
     def i2c_clips(self):
         """Four L-shaped clips for a small I2C board, beside the ESP32.  Each
         corner gets a post with a lip over it; the board tucks under two and
-        presses down under the other two.
-
-        The standoff clears the bracket stud heads, which sit under it."""
+        presses down under the other two."""
         cfg = self.cfg
         half_w = (cfg['i2c_wid'] + cfg['i2c_fit']) / 2.0
         half_l = (cfg['i2c_len'] + cfg['i2c_fit']) / 2.0
@@ -604,24 +946,24 @@ class Case(object):
         h_board = h_shoulder + cfg['i2c_thick'] + 0.2
         h_top = h_board + cfg['i2c_lip_t']
 
-        posts = sketch_at(self.root, self.plate_face_z)
+        posts = self.mount_plane(0)
         for sx in (-1, 1):
             for sy in (-1, 1):
-                xe = cfg['i2c_x'] + sx * half_w
-                ye = cfg['i2c_y'] + sy * half_l
+                xe = self.i2c_x + sx * half_w
+                ye = self.i2c_y + sy * half_l
                 # Two overlapping arms make the L.
                 self.corner_rect(posts, xe - sx * cfg['i2c_lip'], xe + sx * cfg['i2c_post'],
                                  ye - sy * cfg['i2c_arm'], ye + sy * cfg['i2c_post'])
                 self.corner_rect(posts, xe - sx * cfg['i2c_arm'], xe + sx * cfg['i2c_post'],
                                  ye - sy * cfg['i2c_lip'], ye + sy * cfg['i2c_post'])
-        extrude(self.root, profiles(posts), -h_top, JOIN, self.plate)
+        self.mount_grow(profiles(posts), h_top, JOIN)
 
         # Clear the board's own footprint between shoulder and board top, which
         # is what leaves the lips proud and a shoulder to sit on.
-        slot = sketch_at(self.root, self.plate_face_z - h_shoulder)
-        rect(slot, cfg['i2c_x'] - half_w, cfg['i2c_y'] - half_l,
-             cfg['i2c_x'] + half_w, cfg['i2c_y'] + half_l)
-        extrude(self.root, profiles(slot), -(h_board - h_shoulder), CUT, self.plate)
+        slot = self.mount_plane(h_shoulder)
+        rect(slot, self.i2c_x - half_w, self.i2c_y - half_l,
+             self.i2c_x + half_w, self.i2c_y + half_l)
+        self.mount_grow(profiles(slot), h_board - h_shoulder, CUT)
 
     @staticmethod
     def corner_rect(sketch, xa, xb, ya, yb):
@@ -632,60 +974,61 @@ class Case(object):
         with a lip: the board presses past the lips and sits on the shoulders
         below them, standing off the plate far enough for its pins.
 
-        The board goes in pins-forward, so the jumpers to the displays plug on
-        from inside the case."""
+        The board goes in with its pins facing away from the mounting face, so
+        the jumpers to the displays plug on from the open back."""
         cfg = self.cfg
         half = cfg['esp_pcb_wid'] / 2 + cfg['esp_fit'] / 2
-        lip_x = half - cfg['esp_lip']
+        lip = half - cfg['esp_lip']
         h_shoulder = cfg['esp_pad_height']
         h_board = h_shoulder + cfg['esp_pcb_thick'] + 0.2
         h_lip = h_board + cfg['esp_lip_t']
         half_len = cfg['esp_finger_len'] / 2.0
-        ys = (-cfg['esp_finger_y'], cfg['esp_finger_y'])
+        us = (-cfg['esp_finger_y'], cfg['esp_finger_y'])
 
-        posts = sketch_at(self.root, self.plate_face_z)
-        for sx in (-1, 1):
-            for cy in ys:
-                x0, x1 = sx * lip_x, sx * (half + cfg['esp_rail_w'])
-                rect(posts, min(x0, x1), cy - half_len, max(x0, x1), cy + half_len)
-        extrude(self.root, profiles(posts), -h_lip, JOIN, self.plate)
+        posts = self.mount_plane(0)
+        for sv in (-1, 1):
+            for cu in us:
+                self.esp_rect(posts, cu - half_len, cu + half_len,
+                              sv * lip, sv * (half + cfg['esp_rail_w']))
+        self.mount_grow(profiles(posts), h_lip, JOIN)
 
         # Undercut each finger between shoulder and board top, which is what
         # leaves a lip to snap over and a shoulder to sit on.
-        slot = sketch_at(self.root, self.plate_face_z - h_shoulder)
-        for sx in (-1, 1):
-            for cy in ys:
-                x0, x1 = sx * lip_x, sx * half
-                rect(slot, min(x0, x1), cy - half_len - 0.5,
-                     max(x0, x1), cy + half_len + 0.5)
-        extrude(self.root, profiles(slot), -(h_board - h_shoulder), CUT, self.plate)
+        slot = self.mount_plane(h_shoulder)
+        for sv in (-1, 1):
+            for cu in us:
+                self.esp_rect(slot, cu - half_len - 0.5, cu + half_len + 0.5,
+                              sv * lip, sv * half)
+        self.mount_grow(profiles(slot), h_board - h_shoulder, CUT)
 
         # Stop at the far end so the board cannot creep away from the cable
         # slot.  The USB end stays open.
-        stop = sketch_at(self.root, self.plate_face_z)
-        y0 = cfg['esp_pcb_len'] / 2 + 0.4
-        rect(stop, -10, y0, 10, y0 + 3.0)
-        extrude(self.root, profiles(stop), -h_board, JOIN, self.plate)
+        stop = self.mount_plane(0)
+        u0 = cfg['esp_pcb_len'] / 2 + 0.4
+        self.esp_rect(stop, u0, u0 + 3.0, -10, 10)
+        self.mount_grow(profiles(stop), h_board, JOIN)
 
     def esp_pads(self):
         """Four pads the DevKit sits on, raising it clear of its header pins.
         Screw them if your board has mounting holes, otherwise foam tape."""
         cfg = self.cfg
-        dx = cfg['esp_hole_dx'] / 2.0
-        dy = cfg['esp_hole_dy'] / 2.0
-        sk = sketch_at(self.root, self.plate_face_z)
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                circle(sk, sx * dx, sy * dy, cfg['esp_pad_dia'])
-        extrude(self.root, profiles(sk), -cfg['esp_pad_height'], JOIN, self.plate)
-
-        if not cfg['esp_screw_holes']:
-            return
-        holes = sketch_at(self.root, self.plate_face_z - cfg['esp_pad_height'])
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                circle(holes, sx * dx, sy * dy, cfg['esp_pilot'])
-        extrude(self.root, profiles(holes), cfg['esp_pad_height'], CUT, self.plate)
+        # Screw holes go where the board's holes are; glue pads spread out to
+        # near its corners instead.
+        if cfg['esp_screw_holes']:
+            du, dv = cfg['esp_hole_dy'] / 2.0, cfg['esp_hole_dx'] / 2.0
+        else:
+            du = cfg['esp_pcb_len'] / 2.0 - cfg['esp_pad_dia'] / 2.0 - 1.0
+            dv = cfg['esp_pcb_wid'] / 2.0 - cfg['esp_pad_dia'] / 2.0 - 1.0
+        sk = self.mount_plane(0)
+        holes = self.mount_plane(cfg['esp_pad_height'])
+        for su in (-1, 1):
+            for sv in (-1, 1):
+                px, py = self.esp_point(su * du, sv * dv)
+                circle(sk, px, py, cfg['esp_pad_dia'])
+                circle(holes, px, py, cfg['esp_pilot'])
+        self.mount_grow(profiles(sk), cfg['esp_pad_height'], JOIN)
+        if cfg['esp_screw_holes']:
+            self.mount_grow(profiles(holes), -cfg['esp_pad_height'], CUT)
 
     # -- display clips -----------------------------------------------------
     def clips(self):
@@ -694,8 +1037,8 @@ class Case(object):
         cfg = self.cfg
         for name, x in zip(('Clips L', 'Clips R'), self.centres):
             sk = sketch_at(self.root, self.pcb_back_z)
-            circle(sk, x, 0, self.clip_od)
-            circle(sk, x, 0, self.clip_id)
+            circle(sk, x, self.disp_cy, self.clip_od)
+            circle(sk, x, self.disp_cy, self.clip_id)
             feat = extrude(self.root, profiles(sk, loops=2), cfg['clip_thick'], NEW)
             clip = feat.bodies.item(0)
             clip.name = name
@@ -708,7 +1051,7 @@ class Case(object):
             holes = sketch_at(self.root, self.pcb_back_z)
             for ang in self.pad_angles:
                 px = x + self.pad_radius * math.cos(math.radians(ang))
-                py = self.pad_radius * math.sin(math.radians(ang))
+                py = self.disp_cy + self.pad_radius * math.sin(math.radians(ang))
                 circle(holes, px, py, cfg['clip_clear'])
             extrude(self.root, profiles(holes), cfg['clip_thick'], CUT, clip)
 
@@ -766,16 +1109,23 @@ def run(context):
             else:
                 mount = 'Wall screws {:.1f} mm apart, level.\n\n'.format(across)
 
+        bay = ''
+        if case.bay_h:
+            bay = ('Bay {:.1f} tall under the displays; ESP32 at ({:+.1f},{:+.1f}), '
+                   'I2C pads at ({:+.1f},{:+.1f}).\n\n'
+                   .format(case.bay_h, case.esp_x, case.esp_y, case.i2c_x, case.i2c_y))
+
         ui.messageBox(
             'Built {:.1f} x {:.1f} x {:.1f} mm.\n\n'
             'Pocket: {:.1f} circle, {} tab slot(s) {:.1f} wide reaching {:.1f} '
             'from centre.\n\n'
             '{}'
+            '{}'
             'Print the case body front-face-down, the back plate flat with\n'
             'its pads upward, the clips flat.  No supports.'
             .format(case.width, case.height, CONFIG['depth'],
                     case.pocket_dia, CONFIG['tab_count'], case.pocket_tab_w,
-                    case.pocket_tab_reach, mount))
+                    case.pocket_tab_reach, bay, mount))
     except:
         if ui:
             ui.messageBox('Script failed:\n{}'.format(traceback.format_exc()))

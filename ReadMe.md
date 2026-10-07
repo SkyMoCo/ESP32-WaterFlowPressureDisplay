@@ -19,6 +19,9 @@ with the pins moved off the ones the meter already uses.
   ReadMe for why each part is there.
 - 2 × 1.28" 240×240 round TFT, GC9A01 controller, 3.3 V, about 50 mA each
 
+Every connection on one page, including the sensor front ends and the harness
+notes for a permanent install: [hardware/WIRING.md](hardware/WIRING.md).
+
 ### Display wiring
 
 | ESP32 | Pressure display | Flow display |
