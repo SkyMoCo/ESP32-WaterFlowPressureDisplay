@@ -320,16 +320,11 @@ if cfg['i2c_mount'] != 'none':
         check('I2C pads sit on solid plate', not over,
               'over keyhole at {}'.format(over) if over else 'clear of the keyholes')
 
-# ---- cable slot -----------------------------------------------------------
+# ---- wall openings --------------------------------------------------------
 if cfg['esp_mount'] == 'expansion':
     board_top = cfg['front_thick'] + cfg['exp_standoff'] + cfg['exp_thick']
-    devkit_pcb = board_top + cfg['exp_socket']
-    openings = [
-        ('barrel jack', cfg['jack_wall'], cfg['jack_offset'], cfg['jack_w'],
-         board_top - 1.0, board_top + cfg['jack_h'] + 1.0),
-        ('USB-C', cfg['usb_wall'], cfg['usb_offset'], cfg['usb_w'],
-         devkit_pcb - 1.0, devkit_pcb + cfg['usb_h']),
-    ]
+    # Straight from the script, so the holes and these checks cannot drift.
+    openings = case.expansion_sockets()
     print()
     for name, wall, off, w, z0, z1 in openings:
         along = (case.board_y if wall in ('left', 'right') else case.board_x) + off
@@ -357,13 +352,17 @@ if cfg['esp_mount'] == 'expansion':
         check('{} reaches that wall'.format(name), gap < 14.0,
               '{:.1f} mm from the board edge to the wall'.format(gap))
 
-    side_gap = (abs(cfg['jack_offset'] - cfg['usb_offset'])
-                - (cfg['jack_w'] + cfg['usb_w']) / 2)
-    z_gap = (devkit_pcb - 1.0) - (board_top + cfg['jack_h'] + 1.0)
-    check('wall left between the jack and USB openings',
-          cfg['jack_wall'] != cfg['usb_wall'] or side_gap >= 2.5 or z_gap >= 2.5,
-          '{:.1f} mm apart along the wall, {:+.1f} in height'
-          .format(side_gap, z_gap))
+    # Every pair of holes in the same wall needs plastic left between them.
+    for i, (n1, w1, o1, wd1, a1, b1) in enumerate(openings):
+        for n2, w2, o2, wd2, a2, b2 in openings[i + 1:]:
+            if w1 != w2:
+                continue
+            side_gap = abs(o1 - o2) - (wd1 + wd2) / 2
+            z_gap = max(a1, a2) - min(b1, b2)
+            check('wall left between {} and {}'.format(n1, n2),
+                  side_gap >= 2.5 or z_gap >= 2.5,
+                  '{:.1f} mm apart along the wall, {:+.1f} in height'
+                  .format(side_gap, z_gap))
 
     plug_top = board_top + PLUG
     check('wires off the 3-pin headers have room to turn',

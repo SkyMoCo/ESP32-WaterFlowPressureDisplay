@@ -3,3 +3,8 @@ include/secrets.h
 .vscode/
 .claude/
 __pycache__/
+# KiCad per-user state, locks and backups
+*.kicad_prl
+*.lck
+*-backups/
+fp-info-cache

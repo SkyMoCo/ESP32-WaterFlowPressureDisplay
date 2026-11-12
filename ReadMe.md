@@ -22,6 +22,11 @@ with the pins moved off the ones the meter already uses.
 Every connection on one page, including the sensor front ends and the harness
 notes for a permanent install: [hardware/WIRING.md](hardware/WIRING.md).
 
+For a permanent install there is a carrier PCB that replaces the expansion
+board and the harness. It has screw terminals for power, the sensors and the
+LED, and headers for the displays. Gerbers, BOM and pick-and-place are ready
+to order: [hardware/pcb](hardware/pcb/README.md).
+
 ### Display wiring
 
 | ESP32 | Pressure display | Flow display |

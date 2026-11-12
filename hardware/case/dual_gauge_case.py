@@ -85,11 +85,10 @@ CONFIG = {
     # 'plate'  boards on the back plate, as before -- then set bay_height to 0
     #          and depth back to 40
     'board_mount':  'body',
-    'depth':          35.0,   # front face to back plate.  With the boards in
-                              # the bay rather than behind the displays, this
-                              # only has to clear the deepest single stack:
-                              # dupont plugs on the expansion board's 3-pin
-                              # headers, ~23, plus room for the wires to turn.
+    'depth':          42.6,   # front face to back plate.  Was 35, which only
+                              # just cleared the dupont plugs on the expansion
+                              # board's 3-pin headers (~23); +0.3 in gives the
+                              # connectors and their wires somewhere to go.
 
     # ---- shell -------------------------------------------------------------
     'wall':            2.4,
@@ -141,10 +140,25 @@ CONFIG = {
     'jack_offset':   -20.0,   # measured: 20 below the board centre
     'jack_w':         14.0,
     'jack_h':         11.0,   # body height above the board
-    'usb_wall':     'left',   # the DevKit's USB-C, for reflashing in place
-    'usb_offset':      0.0,
-    'usb_w':          13.0,
-    'usb_h':           7.0,
+    # Two USB openings: one to the socket on the expansion board, one straight
+    # to the DevKit's own.  They sit at different heights in the stack, which is
+    # why each is keyed to the board it belongs to rather than sharing a number.
+    #
+    # Expansion board's own socket, lying flat on the PCB.  All three sockets
+    # are on the board's 51 mm edge, which faces the left wall, so all three
+    # holes are in that wall.  Offsets are from the board centre, + toward the
+    # top of the case.
+    'usb_board_wall':   'left',
+    'usb_board_offset':   12.75,   # 12.75 from the end of the 51 edge
+    'usb_board_w':         13.0,
+    'usb_board_h':          7.0,
+    # DevKit's own socket, sitting exp_socket above the expansion board.
+    'usb_devkit_wall':   'left',
+    'usb_devkit_offset':    0.0,   # along the wall, from the board centre
+    'usb_devkit_lift':      4.0,   # raises the hole in height, above where
+                                   # exp_socket alone would put it
+    'usb_devkit_w':        13.0,
+    'usb_devkit_h':         7.0,
     'esp_pcb_len':    51.5,   # long edge
     'esp_pcb_wid':    28.3,   # short edge, the USB-C end
     'esp_rotate':     True,   # True lays the board on its side in the bay, so
@@ -617,21 +631,27 @@ class Case(object):
                  sx * (self.width / 2 - cfg['wall'] - 1), along + half)
         extrude(self.root, profiles(sk), z1 - z0, CUT, self.body)
 
-    def expansion_openings(self):
-        """Holes for the barrel jack on the expansion board and the USB-C on
-        the DevKit plugged in above it.  Both are keyed off where those parts
-        actually sit in the stack."""
+    def expansion_sockets(self):
+        """Where each socket sits, as (name, wall, offset, width, z0, z1).  Also
+        used by check_case.py, so the holes and the checks cannot drift."""
         cfg = self.cfg
         board_top = cfg['front_thick'] + cfg['exp_standoff'] + cfg['exp_thick']
-        devkit_pcb = board_top + cfg['exp_socket']
+        devkit = board_top + cfg['exp_socket'] + cfg['usb_devkit_lift']
+        return [
+            ('barrel jack', cfg['jack_wall'], cfg['jack_offset'], cfg['jack_w'],
+             board_top - 1.0, board_top + cfg['jack_h'] + 1.0),
+            ('board USB', cfg['usb_board_wall'], cfg['usb_board_offset'],
+             cfg['usb_board_w'], board_top - 1.0, board_top + cfg['usb_board_h']),
+            ('DevKit USB', cfg['usb_devkit_wall'], cfg['usb_devkit_offset'],
+             cfg['usb_devkit_w'], devkit - 1.0, devkit + cfg['usb_devkit_h']),
+        ]
 
-        along = self.board_y if cfg['jack_wall'] in ('left', 'right') else self.board_x
-        self.wall_opening(cfg['jack_wall'], along + cfg['jack_offset'], cfg['jack_w'],
-                          board_top - 1.0, board_top + cfg['jack_h'] + 1.0)
-
-        along = self.board_y if cfg['usb_wall'] in ('left', 'right') else self.board_x
-        self.wall_opening(cfg['usb_wall'], along + cfg['usb_offset'], cfg['usb_w'],
-                          devkit_pcb - 1.0, devkit_pcb + cfg['usb_h'])
+    def expansion_openings(self):
+        """Holes for the barrel jack, the expansion board's USB socket, and the
+        DevKit's own USB above it."""
+        for _, wall, offset, width, z0, z1 in self.expansion_sockets():
+            along = self.board_y if wall in ('left', 'right') else self.board_x
+            self.wall_opening(wall, along + offset, width, z0, z1)
 
     def cable_slot(self):
         """Notch for the USB plug, in whichever wall the DevKit's USB-C end

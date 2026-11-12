@@ -10,7 +10,7 @@ To change anything, edit `CONFIG` at the top of the script and run it again. It
 builds a fresh design each time rather than editing the previous one, so
 nothing is lost by re-running.
 
-Default size: **118.1 × 140.8 × 35 mm** — displays side by side in the top
+Default size: **118.1 × 140.8 × 42.6 mm** — displays side by side in the top
 band, an electronics bay under them. Both the width and the bay height are
 derived from what has to fit in that bay, so the case is as small as its
 contents allow.
@@ -115,13 +115,13 @@ Check these against your own parts and update `CONFIG`:
 | `exp_len` / `exp_wid` | 67 / 51 | expansion board — sets the bay height |
 | `i2c_len` / `i2c_wid` | 40 / 21.75 | I2C board — widens the case to fit beside it |
 | `esp_pcb_len` / `esp_pcb_wid` | 51.5 / 28.3 | bare DevKit, for the other mount styles |
-| `depth` | 35.0 | see below |
+| `depth` | 42.6 | see below |
 
-**Depth is the one to check first.** With the boards in the bay rather than
-behind the displays, it only has to clear the deepest single stack — which is
-now the dupont plugs on the expansion board's 3-pin headers at about 23 mm,
-plus room for the wires to turn. If you solder straight to the pads instead,
-28 mm would do.
+**Depth is set by the wiring, not the parts.** The deepest thing in the case is
+the dupont plugs on the expansion board's 3-pin headers, at about z=23. At
+42.6 mm there is 13.5 mm between those plugs and the lid, which is room for the
+connectors and for the wires to turn rather than being crushed against it. If
+you solder straight to the pads instead, 28 mm would do.
 
 ## How the ESP32 mounts
 
@@ -147,24 +147,34 @@ double-sided tape real area to grip — a 3 × 3 grid set by `exp_pad_nx` /
 Measured values go in `exp_len` / `exp_wid` / `exp_thick`, and `exp_fit` (0.6)
 is the slack inside the brackets.
 
-### The two openings
+### The three openings
 
 This board (an ESP32 30P expansion board: 3-pin headers down each side, barrel
-jack bottom left) needs two holes in the **left wall**, at different heights
-because the parts sit at different levels in the stack:
+jack bottom left) needs three holes. Each is keyed to the part it serves, which
+is why they're at different heights:
 
-| Opening | Height above the face | Why there |
+All three sockets are on the board's **51 mm edge**, which faces the left wall,
+so all three holes are in that wall:
+
+| Opening | Position along the wall | Height above the face |
 |---|---|---|
-| Barrel jack | z 8.1 – 21.1 | the jack body sits on the expansion PCB |
-| USB-C | z 16.6 – 24.6 | the DevKit sits `exp_socket` (8.5) higher, on its header |
+| Barrel jack | 20 below the board centre | z 8.1 – 21.1 |
+| Board USB | 12.75 above the board centre | z 8.1 – 16.1 |
+| DevKit USB | level with the board centre | z 20.6 – 28.6 |
 
-They're 3 mm apart along the wall, which is a thin pillar of plastic — so if
-you move one, re-run `check_case.py`, which measures that gap.
+The two on the expansion PCB sit low; the DevKit's own socket is `exp_socket`
+(8.5) higher because it plugs in above, plus `usb_devkit_lift` (4).
 
-Aim them with `jack_wall` / `jack_offset` and `usb_wall` / `usb_offset`. The
-offsets run along the wall from the **expansion board's centre**, so the jack
-at -16.5 is 16.5 mm below centre, near the board's bottom edge. Sizes are
-`jack_w` / `jack_h` and `usb_w` / `usb_h`, and they're the hole, not the part.
+Aim them with `jack_wall` / `jack_offset`, `usb_board_wall` /
+`usb_board_offset`, and `usb_devkit_wall` / `usb_devkit_offset`. **Offsets run
+along the wall from the expansion board's centre, positive toward the top of the
+case.** Sizes are the `*_w` / `*_h` pairs, and they're the hole, not the part.
+
+`check_case.py` reads these straight out of the script, so the checks can't
+drift from the geometry. It tests **every pair sharing a wall** for the plastic
+left between them, in either direction — the board USB and the DevKit USB
+overlap along the wall but are 4.5 mm apart in height, which is what keeps them
+separate holes.
 
 **This board sets the case height.** The bay is sized around it, so the case is
 140.8 mm tall. To trim that: `bay_margin` (5) is the clearance to the bay
@@ -247,8 +257,9 @@ case face-down on the bench and the back open.
    them, so they go in square. Plug the DevKit into the expansion board.
 3. Wire it up — see [hardware/WIRING.md](../WIRING.md). Everything is facing
    you and nothing is attached to the lid, which is the point of this layout.
-4. Check the barrel jack and the DevKit's USB-C line up with their holes in
-   the left wall, then screw the lid on.
+4. Check all three sockets line up with their holes — jack and DevKit USB in
+   the left wall, the board's own USB in the bottom wall — then screw the lid
+   on.
 5. Screw the **wall bracket** up on its own, four screws through the ears:
    **128.1 mm apart across, 94.0 mm apart vertically**.
 6. Hang the case on it — hold it about 9 mm high so the four studs pass
